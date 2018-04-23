@@ -5,6 +5,8 @@ import networkx as nx
 import random
 import numpy
 from collections import deque
+import csv
+
 # import tweepy as twpy
 
 # CONSUMER_KEY = 'raDhcojjcOIjpoGkpwdbJ8aj7'
@@ -20,8 +22,26 @@ from collections import deque
 
 NODES = 'nodes'
 EDGES = 'edges'
+RETWEET_THRESHOLD = 0.5
+SENTIMENT_THRESHOLD = 0.5
 
-def gen_friend_graph(n, thres=0.5):
+def parse_twitter_users():
+    # return: ({ user: followers (#out) }, { user: following (#in) })
+    outdegrees = dict()
+    indegrees = dict()
+    with open('twitter-analysis/users.csv', 'r', encoding='utf-8') as f:
+        csvreader = csv.reader(f)
+        for row in csvreader:
+            user_id = row[0]
+            outdegree = row[13]
+            indegree = row[14]
+            outdegrees[user_id] = outdegree
+            indegrees[user_id] = indegree
+
+    return (outdegrees, indegree)
+
+
+def gnp_friend_graph(n, thres=0.5):
     nodes = set(range(n))
     edges = { i:[] for i in nodes }
     for i in nodes:
@@ -33,10 +53,11 @@ def gen_friend_graph(n, thres=0.5):
 
     return { NODES: nodes, EDGES: edges }
 
+
 # graph model:
 # nodes = { key=user: val=retweet content sentiment }
 # edges = { key=user: val=list(retweeters) }
-def gen_retweet_graph(friend_graph, start=-1, thres=0.5, bias=0):
+def gen_retweet_graph(friend_graph, start=-1, thres=RETWEET_THRESHOLD, bias=0):
     # if no specified starter, choose the person with most followers
     if start == -1:
         start = max(friend_graph[NODES], key=lambda x: len(friend_graph[EDGES][x]))
@@ -65,8 +86,16 @@ def gen_retweet_graph(friend_graph, start=-1, thres=0.5, bias=0):
 
     return { NODES: nodes, EDGES: edges }
 
+# def size_by_sentiment(rt_graph, sent_thres=SENTIMENT_THRESHOLD):
+
+
 # MAIN
 
-G = gen_friend_graph(10)
-print(G[EDGES])
-print(gen_retweet_graph(G))
+# G = gnp_friend_graph(10)
+# print(G[EDGES])
+# print(gen_retweet_graph(G))
+
+follower_counts, following_counts = parse_twitter_users()
+print(follower_counts[])
+
+
