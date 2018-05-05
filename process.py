@@ -1,7 +1,6 @@
 import json
 import pprint
 from math import log
-from threading import Lock
 from multiprocessing import Pool, current_process
 import os
 import pickle
@@ -19,8 +18,11 @@ TRAIN_DATA = 'reddit_2006june.txt'
 # LIST OF SUBREDDITS WE CARE ABOUT
 QUERY_SUBREDDITS = ['reddit.com', 'nsfw']
 
+TEMP_DIR = "temp"
+OUTPUT_DIR = "output"
+
 # Number of pools to start
-cores = 2
+cores = 4
 
 # Dict of subreddit -> dict of link id to RedditThread
 subredditThreads = {}
@@ -33,19 +35,31 @@ class RedditThread():
         self.netScore = 0
         self.link = link
         self.numberOfComments = 0
-        self.lock = Lock()
 
     def update(self, body, score):
-        with self.lock:
-            self.netScore += score
-            self.body = self.body + " " + body
-            self.numberOfComments += 1
+        self.netScore += score
+        self.body = self.body + " " + body
+        self.numberOfComments += 1
 
-def process_wrapper(lineByte):
-    with open(TRAIN_DATA) as f:
-        f.seek(lineByte)
-        line = f.readline()
-        process(line)
+    def concat(self, reddit_thread):
+        self.netScore += reddit_thread.netScore
+        self.body = self.body + " " + reddit_thread.body
+        self.numberOfComments += reddit_thread.numberOfComments
+
+def concatSubredditDicts(d1, d2):
+    for link in d2.keys():
+        if link in d1:
+            d1[link].concat(d2[link])
+        else:
+            d1[link] = d2[link]
+
+def process_wrapper(file):
+    with open(TEMP_DIR + "/" + file) as f:
+        for line in f:
+            process(line)
+    for subreddit in subredditThreads.keys():
+        with open(OUTPUT_DIR + "/" + subreddit + "_" + file + ".pkl", 'wb') as pickle_file:
+            pickle.dump(subredditThreads[subreddit], pickle_file)
 
 def process(line):
     try:
@@ -60,28 +74,37 @@ def process(line):
     except:
         pass
 
+def init_directory(dir_name):
+    directory = './' + dir_name
+    try:
+        os.makedirs(directory)
+    except OSError:
+        if not os.path.isdir(directory):
+            raise
+
 def main():
     pool = Pool(cores)
     jobs = []
 
-    with open(TRAIN_DATA) as f:
-        line = f.readline()
-        while line:
-            nextLineByte = f.tell()
-            jobs.append( pool.apply_async(process_wrapper,args=(nextLineByte,)) )
-            line = f.readline()
-            nextLineByte = f.tell()
-
-    l = len(jobs)
-    for index, job in enumerate(jobs):
-        if index % 1000 == 0:
-            print('%s/%s lines processed.' % (index, l))
+    init_directory(TEMP_DIR)
+    init_directory(OUTPUT_DIR)
+    os.system("split -l 10000 " + TRAIN_DATA + " " + TEMP_DIR + "/" + TRAIN_DATA.replace(".txt", ""))
+    for file in os.listdir("./" + TEMP_DIR):
+        jobs.append( pool.apply_async(process_wrapper, args=(file, )) )
+    
+    for job in jobs:
         job.get()
 
     pool.close()
 
-    for k, v in subredditThreads.items():
-        print('%s:%s' % (k, len(v)))
+    for subreddit in subredditThreads:
+        subreddit_dict = {}
+        for file in os.listdir("./" + OUTPUT_DIR):
+            if file.startswith(subreddit):
+                with open(OUTPUT_DIR + "/" + file, 'rb') as subreddit_pickle:
+                    concatSubredditDicts(subreddit_dict, pickle.load(subreddit_pickle))
+        with open(OUTPUT_DIR + "/" + subreddit + ".pkl", 'wb') as sub_pkl:
+            pickle.dump(subreddit_dict, sub_pkl)
 
+        os.system("rm -rf " + TEMP_DIR)
 main()    
-    
