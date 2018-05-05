@@ -1,9 +1,14 @@
+####################################################################################
+ # python process.py <number of workers> <file> <lines per batch> <subreddits>*
+ #
+####################################################################################
 import json
 import pprint
 from math import log
 from multiprocessing import Pool, current_process
 import os
 import pickle
+import sys
 
 # CONSTANTS 
 ID = 'id'
@@ -13,21 +18,18 @@ PARENT = 'parent_id'
 LINK = 'link_id'
 SUBREDDIT = 'subreddit'
 
-TRAIN_DATA = 'reddit_2006june.txt'
-# TEST_DATA = 'reddit_2005dec.json'
+TRAIN_DATA = ""
+
 # LIST OF SUBREDDITS WE CARE ABOUT
-QUERY_SUBREDDITS = ['reddit.com', 'nsfw']
+QUERY_SUBREDDITS = []
+subredditThreads = {}
 
 TEMP_DIR = "temp"
 OUTPUT_DIR = "output"
 
 # Number of pools to start
-cores = 4
-
-# Dict of subreddit -> dict of link id to RedditThread
-subredditThreads = {}
-for s in QUERY_SUBREDDITS:
-    subredditThreads[s] = {}
+NUM_WORKERS = 0
+NUM_LINES = 0
 
 class RedditThread():
     def __init__(self, link):
@@ -54,6 +56,10 @@ def concatSubredditDicts(d1, d2):
             d1[link] = d2[link]
 
 def process_wrapper(file):
+    global subredditThreads
+    subredditThreads = {}
+    for s in QUERY_SUBREDDITS:
+        subredditThreads[s] = {}
     with open(TEMP_DIR + "/" + file) as f:
         for line in f:
             process(line)
@@ -82,22 +88,38 @@ def init_directory(dir_name):
         if not os.path.isdir(directory):
             raise
 
-def main():
-    pool = Pool(cores)
+def main(args):
+    global NUM_LINES, NUM_WORKERS, TRAIN_DATA, QUERY_SUBREDDITS, subredditThreads
+
+    NUM_WORKERS = int(args[1])
+    TRAIN_DATA = args[2]
+    NUM_LINES = int(args[3])
+    QUERY_SUBREDDITS = args[4:]
+
+    for s in QUERY_SUBREDDITS:
+        subredditThreads[s] = {}
+
+    print("Looking at subreddits: " + str(QUERY_SUBREDDITS))
+
+    pool = Pool(NUM_WORKERS)
     jobs = []
 
     init_directory(TEMP_DIR)
     init_directory(OUTPUT_DIR)
-    os.system("split -l 10000 " + TRAIN_DATA + " " + TEMP_DIR + "/" + TRAIN_DATA.replace(".txt", ""))
+    print("Splitting data into batches of " + str(NUM_LINES))
+    os.system("split -l " + str(NUM_LINES) + " " + TRAIN_DATA + " " + TEMP_DIR + "/" + TRAIN_DATA.replace(".txt", ""))
+    print("Sending data to workers to parse")
     for file in os.listdir("./" + TEMP_DIR):
         jobs.append( pool.apply_async(process_wrapper, args=(file, )) )
     
-    for job in jobs:
+    for index, job in enumerate(jobs):
         job.get()
+        print(str((index + 1) * NUM_LINES) + " parsed out of approx. " + str(len(jobs) * NUM_LINES))
 
     pool.close()
 
-    for subreddit in subredditThreads:
+    print("Accumulating pickle files into <subreddit>.pkl")
+    for subreddit in QUERY_SUBREDDITS:
         subreddit_dict = {}
         for file in os.listdir("./" + OUTPUT_DIR):
             if file.startswith(subreddit):
@@ -107,4 +129,8 @@ def main():
             pickle.dump(subreddit_dict, sub_pkl)
 
         os.system("rm -rf " + TEMP_DIR)
-main()    
+
+if __name__ == '__main__':
+    if (len(sys.argv) < 5):
+        raise Exception('Not Enough Arguments')
+    main(sys.argv)
