@@ -5,9 +5,13 @@ import json
 import pprint
 from math import log
 from multiprocessing import Pool, current_process
+from multiprocessing.pool import ThreadPool
 import os
 import pickle
 import sys
+import urllib.request
+import urllib.parse
+import time
 
 # CONSTANTS 
 ID = 'id'
@@ -36,6 +40,7 @@ class RedditThread():
         self.netScore = 0
         self.link = link
         self.numberOfComments = 0
+        self.post = {}
 
     def update(self, body, score):
         self.netScore += score
@@ -47,6 +52,11 @@ class RedditThread():
         self.body = self.body + " " + reddit_thread.body
         self.numberOfComments += reddit_thread.numberOfComments
 
+    def addOriginalPost(self, postBody, postScore):
+        self.post = { 'body': postBody, 'score': postScore }
+        self.body += postBody
+        self.netScore += postScore
+
 def concatSubredditDicts(d1, d2):
     for link in d2.keys():
         if link in d1:
@@ -54,6 +64,35 @@ def concatSubredditDicts(d1, d2):
         else:
             d1[link] = d2[link]
 
+def getPostsById(keys):
+    if len(keys) > 0:
+        # get in batches of 400
+        CHUNK_SIZE = 400
+        start = 0
+        end = CHUNK_SIZE
+        total = []
+        while end < len(keys):
+            postIds = "https://www.reddit.com/by_id/" + ",".join(keys[start:end]) + ".json"
+            contents = urllib.request.urlopen(postIds).read()
+            total.extend(json.loads(contents)['data']['children'])
+
+            start += CHUNK_SIZE
+            end += CHUNK_SIZE
+            time.sleep(60)
+        
+        postIds = "https://www.reddit.com/by_id/" + ",".join(keys[start:]) + ".json"
+        contents = urllib.request.urlopen(postIds).read()
+        total.extend(json.loads(contents)['data']['children'])
+
+        return total
+    return []
+
+def rehydrate(subreddit_dict, subreddit_obj):
+    body = subreddit_obj['data']['selftext']
+    score = subreddit_obj['data']['score']
+    link_id = subreddit_obj['data']['name']
+    subreddit_dict[link_id].addOriginalPost(body, score)
+    
 def process_wrapper(file):
     global subredditThreads
     subredditThreads = {}
@@ -117,7 +156,9 @@ def main(args):
         print(str((index + 1) * NUM_LINES) + " parsed out of approx. " + str(len(jobs) * NUM_LINES))
 
     pool.close()
-
+    
+    threadPool = ThreadPool(NUM_WORKERS)
+    
     print("Accumulating pickle files into <subreddit>.pkl")
     for subreddit in QUERY_SUBREDDITS:
         subreddit_dict = {}
@@ -125,10 +166,23 @@ def main(args):
             if file.startswith(subreddit):
                 with open(OUTPUT_DIR + "/" + file, 'rb') as subreddit_pickle:
                     concatSubredditDicts(subreddit_dict, pickle.load(subreddit_pickle))
+        print("Rehydrating the original posts for subreddit " + subreddit)
+        
+        j = getPostsById(list(subreddit_dict.keys()))
+        rehydrateJobs = []
+        for obj in j:
+            rehydrateJobs.append(threadPool.apply_async(rehydrate, (subreddit_dict, obj, ) ))
+
+        for job in rehydrateJobs:
+            job.get()
+
         with open(OUTPUT_DIR + "/" + subreddit + ".pkl", 'wb') as sub_pkl:
             pickle.dump(subreddit_dict, sub_pkl)
 
         os.system("rm -rf " + TEMP_DIR)
+    
+    
+    
 
 if __name__ == '__main__':
     if (len(sys.argv) < 5):
