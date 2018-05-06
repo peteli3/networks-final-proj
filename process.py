@@ -1,6 +1,5 @@
 ####################################################################################
  # python process.py <number of workers> <file> <lines per batch> <subreddits>*
- #
 ####################################################################################
 import json
 import pprint
@@ -64,8 +63,9 @@ def process_wrapper(file):
         for line in f:
             process(line)
     for subreddit in subredditThreads.keys():
-        with open(OUTPUT_DIR + "/" + subreddit + "_" + file + ".pkl", 'wb') as pickle_file:
-            pickle.dump(subredditThreads[subreddit], pickle_file)
+        if len(subredditThreads[subreddit]) > 0:
+            with open(OUTPUT_DIR + "/" + subreddit + "_" + file + ".pkl", 'wb') as pickle_file:
+                pickle.dump(subredditThreads[subreddit], pickle_file)
 
 def process(line):
     try:
