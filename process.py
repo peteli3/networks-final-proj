@@ -11,6 +11,8 @@ import pickle
 import sys
 import urllib.request
 import urllib.parse
+import urllib.error
+import praw
 import time
 
 # CONSTANTS 
@@ -33,6 +35,8 @@ OUTPUT_DIR = "output"
 # Number of pools to start
 NUM_WORKERS = 0
 NUM_LINES = 0
+
+reddit = praw.Reddit(client_id='TT8HtZxXLYvEvA', client_secret="xUPNH9fNS-Z_I9yWcLXeTuXCWWU", user_agent='Rehydrater v1')
 
 class RedditThread():
     def __init__(self, link):
@@ -66,23 +70,40 @@ def concatSubredditDicts(d1, d2):
 
 def getPostsById(keys):
     if len(keys) > 0:
-        # get in batches of 400
-        CHUNK_SIZE = 400
+        # get in batches of < 100
+        CHUNK_SIZE = 99
         start = 0
         end = CHUNK_SIZE
         total = []
+        count = 0
+        print(str(len(keys)) + 'posts to be rehydrated')
         while end < len(keys):
-            postIds = "https://www.reddit.com/by_id/" + ",".join(keys[start:end]) + ".json"
-            contents = urllib.request.urlopen(postIds).read()
-            total.extend(json.loads(contents)['data']['children'])
+            print('Fetching chunk ' + str(count))
+            count += 1
+            path = "by_id/" + ",".join(keys[start:end]) + ".json" 
+            try:
+                contents = reddit.request('GET', path)
+                total.extend(contents['data']['children'])
 
-            start += CHUNK_SIZE
-            end += CHUNK_SIZE
-            time.sleep(60)
+                start += CHUNK_SIZE
+                end += CHUNK_SIZE
+                time.sleep(1)
+
+            except urllib.error.HTTPError as e:
+                error_message = e.read()
+                print(error_message)
+                break
         
-        postIds = "https://www.reddit.com/by_id/" + ",".join(keys[start:]) + ".json"
-        contents = urllib.request.urlopen(postIds).read()
-        total.extend(json.loads(contents)['data']['children'])
+        print('Fetching chunk ' + str(count))
+        count += 1
+        path = "by_id/" + ",".join(keys[start:]) + ".json" 
+
+        try:
+            contents = reddit.request('GET', path)
+            total.extend(contents['data']['children'])
+        except urllib.error.HTTPError as e:
+            error_message = e.read()
+            print(error_message)
 
         return total
     return []
@@ -176,7 +197,7 @@ def main(args):
         for job in rehydrateJobs:
             job.get()
 
-        with open(OUTPUT_DIR + "/" + subreddit + ".pkl", 'wb') as sub_pkl:
+        with open(OUTPUT_DIR + "/" + "master_" + subreddit + ".pkl", 'wb') as sub_pkl:
             pickle.dump(subreddit_dict, sub_pkl)
 
         os.system("rm -rf " + TEMP_DIR)
