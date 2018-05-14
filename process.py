@@ -27,7 +27,6 @@ TRAIN_DATA = ""
 
 # LIST OF SUBREDDITS WE CARE ABOUT
 QUERY_SUBREDDITS = []
-subredditThreads = {}
 
 TEMP_DIR = "temp"
 OUTPUT_DIR = "output"
@@ -115,19 +114,18 @@ def rehydrate(subreddit_dict, subreddit_obj):
     subreddit_dict[link_id].addOriginalPost(body, score)
     
 def process_wrapper(file):
-    global subredditThreads
     subredditThreads = {}
     for s in QUERY_SUBREDDITS:
         subredditThreads[s] = {}
     with open(TEMP_DIR + "/" + file) as f:
         for line in f:
-            process(line)
-    for subreddit in subredditThreads.keys():
+            process(subredditThreads, line)
+    for subreddit in QUERY_SUBREDDITS:
         if len(subredditThreads[subreddit]) > 0:
             with open(OUTPUT_DIR + "/" + subreddit + "_" + file + ".pkl", 'wb') as pickle_file:
                 pickle.dump(subredditThreads[subreddit], pickle_file)
 
-def process(line):
+def process(subredditThreads, line):
     try:
         post = json.loads(line)
         if post[SUBREDDIT] in QUERY_SUBREDDITS:
@@ -149,15 +147,12 @@ def init_directory(dir_name):
             raise
 
 def main(args):
-    global NUM_LINES, NUM_WORKERS, TRAIN_DATA, QUERY_SUBREDDITS, subredditThreads
+    global NUM_LINES, NUM_WORKERS, TRAIN_DATA, QUERY_SUBREDDITS
 
     NUM_WORKERS = int(args[1])
     TRAIN_DATA = args[2]
     NUM_LINES = int(args[3])
     QUERY_SUBREDDITS = args[4:]
-
-    for s in QUERY_SUBREDDITS:
-        subredditThreads[s] = {}
 
     print("Looking at subreddits: " + str(QUERY_SUBREDDITS))
 
