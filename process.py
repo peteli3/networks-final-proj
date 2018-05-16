@@ -15,7 +15,7 @@ import urllib.error
 import praw
 import time
 
-# CONSTANTS 
+# CONSTANTS
 ID = 'id'
 BODY = 'body'
 SCORE = 'score'
@@ -79,7 +79,7 @@ def getPostsById(keys):
         while end < len(keys):
             print('Fetching chunk ' + str(count))
             count += 1
-            path = "by_id/" + ",".join(keys[start:end]) + ".json" 
+            path = "by_id/" + ",".join(keys[start:end]) + ".json"
             try:
                 contents = reddit.request('GET', path)
                 total.extend(contents['data']['children'])
@@ -92,10 +92,10 @@ def getPostsById(keys):
                 error_message = e.read()
                 print(error_message)
                 break
-        
+
         print('Fetching chunk ' + str(count))
         count += 1
-        path = "by_id/" + ",".join(keys[start:]) + ".json" 
+        path = "by_id/" + ",".join(keys[start:]) + ".json"
 
         try:
             contents = reddit.request('GET', path)
@@ -112,7 +112,7 @@ def rehydrate(subreddit_dict, subreddit_obj):
     score = subreddit_obj['data']['score']
     link_id = subreddit_obj['data']['name']
     subreddit_dict[link_id].addOriginalPost(body, score)
-    
+
 def process_wrapper(file):
     subredditThreads = {}
     for s in QUERY_SUBREDDITS:
@@ -166,15 +166,15 @@ def main(args):
     print("Sending data to workers to parse")
     for file in os.listdir("./" + TEMP_DIR):
         jobs.append( pool.apply_async(process_wrapper, args=(file, )) )
-    
+
     for index, job in enumerate(jobs):
         job.get()
         print(str((index + 1) * NUM_LINES) + " parsed out of approx. " + str(len(jobs) * NUM_LINES))
 
     pool.close()
-    
+
     threadPool = ThreadPool(NUM_WORKERS)
-    
+
     print("Accumulating pickle files into <subreddit>.pkl")
     for subreddit in QUERY_SUBREDDITS:
         subreddit_dict = {}
@@ -183,7 +183,7 @@ def main(args):
                 with open(OUTPUT_DIR + "/" + file, 'rb') as subreddit_pickle:
                     concatSubredditDicts(subreddit_dict, pickle.load(subreddit_pickle))
         print("Rehydrating the original posts for subreddit " + subreddit)
-        
+
         j = getPostsById(list(subreddit_dict.keys()))
         rehydrateJobs = []
         for obj in j:
@@ -196,9 +196,9 @@ def main(args):
             pickle.dump(subreddit_dict, sub_pkl)
 
         os.system("rm -rf " + TEMP_DIR)
-    
-    
-    
+
+
+
 
 if __name__ == '__main__':
     if (len(sys.argv) < 5):
