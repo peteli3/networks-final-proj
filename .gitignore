@@ -1,10 +1,5 @@
-dataset/
+datasets/
 concept/twitter-analysis/
 reddit_chains/
-graph.pdf
-graph-tool/
-politics.pdf
+subreddits/
 output/
-test.pdf
-reddit_2009apr.txt
-reddit_2010jan.txt
