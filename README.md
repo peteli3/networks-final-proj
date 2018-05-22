@@ -1,4 +1,4 @@
-# Determining Topic Homogeneity in Online Sub-Communities
+# Determining topic homogeneity in online sub-communities
 
 Final Project for:
 CS 6850 - Structure of Information Networks
