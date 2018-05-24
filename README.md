@@ -1,6 +1,6 @@
 # Determining topic homogeneity in online sub-communities
 
-Final Project for:  
+Final project for:  
 CS 6850 - Structure of Information Networks  
 Spring 2018, taught by Jon Kleinberg  
 
